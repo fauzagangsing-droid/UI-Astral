@@ -114,6 +114,12 @@ function Helpers.new(theme)
 		function scope:Destroy()
 			if self.Destroyed then return end
 			clean()
+			-- Explicit parent teardown is synchronous even with deferred Roblox
+			-- signals: child gestures/capture must stop before Destroy returns.
+			for _, descendant in ipairs(root:GetDescendants()) do
+				local childScope = scopes[descendant]
+				if childScope then childScope:Destroy() end
+			end
 			root:Destroy()
 		end
 		destroying = root.Destroying:Connect(clean)

@@ -2,7 +2,18 @@ local RunService = game:GetService("RunService")
 local Theme = require(script.Theme)
 local Helpers = require(script.Helpers)
 local Components = require(script.Components)
+local CreateWindow = require(script.Core.Window)
 local UILibrary = {}
+UILibrary.Version = "2.0.0"
+local componentNames = {}
+for name in pairs(Components) do table.insert(componentNames, name) end
+table.sort(componentNames)
+UILibrary.ComponentNames = table.freeze(componentNames)
+
+function UILibrary.CreateWindow(first, second)
+	if first == UILibrary then return CreateWindow(UILibrary, second) end
+	return CreateWindow(UILibrary, first)
+end
 
 function UILibrary.new(config)
 	assert(RunService:IsClient(), "UILibrary must be initialized on the client")

@@ -1,0 +1,110 @@
+{
+  "version": "2.0.0",
+  "entry": "src/shared/UILibrary/init.lua",
+  "sourceSha256": "f51dcdbdbb6b535e262c1bb5e4ed5f874e601911cd9a57dfac14c4b783dc5f30",
+  "artifactSha256": "f78d33771607f1607355ca3d1286c34032c887353e7af5bfe220c34f6203901e",
+  "sources": [
+    {
+      "path": "src/shared/UILibrary/Components/Button.lua",
+      "sha256": "3229695aef19b2d880b6d0af6331d2a897a4a4a13f63a7f92bbc79c0cddf22ad"
+    },
+    {
+      "path": "src/shared/UILibrary/Components/ColorPicker.lua",
+      "sha256": "11dcfa31f83d131e88b0106f2c1ced2f4c45d2a0108772bf1b1cf384ed769c16"
+    },
+    {
+      "path": "src/shared/UILibrary/Components/Divider.lua",
+      "sha256": "2e2fd8d2b015a24566396c9473cba03f0fe31cd8aa99261071879f822c61d040"
+    },
+    {
+      "path": "src/shared/UILibrary/Components/Dropdown.lua",
+      "sha256": "b227f98e72bcca749ba8cbb012583d955ccc48d258c61c31c4d55889f652b11d"
+    },
+    {
+      "path": "src/shared/UILibrary/Components/Keybind.lua",
+      "sha256": "2556f35e18ecef8b2b97c37577fb9c9e79fe63a519f41197f8d256f055c108d8"
+    },
+    {
+      "path": "src/shared/UILibrary/Components/Label.lua",
+      "sha256": "69cfd1c12f34c054f9336ba77bc75ed6f782f533143cfa0214bac0577b4a0814"
+    },
+    {
+      "path": "src/shared/UILibrary/Components/MultiDropdown.lua",
+      "sha256": "100e333f604c91ba0186825d29b912693c76411e19fd031985cd81aab092298c"
+    },
+    {
+      "path": "src/shared/UILibrary/Components/Notification.lua",
+      "sha256": "71b3b053734deeb09f69db5aa1e051c37ef28806c7a48a13d283b1e0c9d01818"
+    },
+    {
+      "path": "src/shared/UILibrary/Components/Paragraph.lua",
+      "sha256": "3347acc5f6b5d8a14b581dc0a315c03aeececfc0e88cfb1facd77a1c5f0c6f2c"
+    },
+    {
+      "path": "src/shared/UILibrary/Components/ProgressBar.lua",
+      "sha256": "4befe68d246eaa47233f3212c10068e17cb88b91bb913fcd87b279b3343b3af0"
+    },
+    {
+      "path": "src/shared/UILibrary/Components/SearchBox.lua",
+      "sha256": "86ea2fb0cb3b98bf4ff8f353cbe80233fb2d48b2a1435e331a6e51af3e5c4c20"
+    },
+    {
+      "path": "src/shared/UILibrary/Components/Section.lua",
+      "sha256": "f51a59138490906415ec502e6d24d0032ac8215862cc7156c4d8e6a0f924ff9c"
+    },
+    {
+      "path": "src/shared/UILibrary/Components/Slider.lua",
+      "sha256": "240c823b22e484f9899c42eb0aaa45b52dc615f7cd1e0b18899e4d1eecea9083"
+    },
+    {
+      "path": "src/shared/UILibrary/Components/TextBox.lua",
+      "sha256": "c87833452c21cadf60d327cbdcbc9eed5614de62038ff5d1d6178a97265ea962"
+    },
+    {
+      "path": "src/shared/UILibrary/Components/Toggle.lua",
+      "sha256": "549cdecf79339292c619508db4bec006b3a45ed90d1198675781b07eab86263b"
+    },
+    {
+      "path": "src/shared/UILibrary/Components/init.lua",
+      "sha256": "5a52f0744ddd41aa906bdc7a95d0ee346e4a6b5bdd8cdc8d9e785acf41d87f49"
+    },
+    {
+      "path": "src/shared/UILibrary/Core/Window.lua",
+      "sha256": "8a427bc69019aa293466f11d3d5a3c4a499dfdce904af76fd46f0c1c001aae0c"
+    },
+    {
+      "path": "src/shared/UILibrary/Helpers.lua",
+      "sha256": "90e7cc792ae78e72652ec17850722680bb928e6c3c42a0860c219da746570f4d"
+    },
+    {
+      "path": "src/shared/UILibrary/Theme.lua",
+      "sha256": "ef190dd24ccf7d9e590161a32ed529c751bebd50591c1201f61a2502a6f5d718"
+    },
+    {
+      "path": "src/shared/UILibrary/init.lua",
+      "sha256": "90d891e41db58abadade3c0c1baa3d44fd49995dd45c4496073859d6961666ba"
+    }
+  ],
+  "modules": [
+    "Components/Button.lua",
+    "Components/ColorPicker.lua",
+    "Components/Divider.lua",
+    "Components/Dropdown.lua",
+    "Components/Keybind.lua",
+    "Components/Label.lua",
+    "Components/MultiDropdown.lua",
+    "Components/Notification.lua",
+    "Components/Paragraph.lua",
+    "Components/ProgressBar.lua",
+    "Components/SearchBox.lua",
+    "Components/Section.lua",
+    "Components/Slider.lua",
+    "Components/TextBox.lua",
+    "Components/Toggle.lua",
+    "Components/init.lua",
+    "Core/Window.lua",
+    "Helpers.lua",
+    "Theme.lua",
+    "init.lua"
+  ]
+}

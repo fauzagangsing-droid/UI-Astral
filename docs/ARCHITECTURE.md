@@ -1,85 +1,92 @@
-# Arsitektur
+# Arsitektur AstralLite 2.0.0
 
-## Pembagian tanggung jawab
+Versi 2.0.0 **belum dirilis**. Source tetap modular; distribusi satu berkas adalah hasil build dari source yang sama. Inspirasi pola API window/tab dari WindUI tidak menambahkan dependensi, menyalin kode, atau mengganti identitas proyek dengan branding WindUI.
+
+## Lapisan runtime
 
 ```mermaid
 flowchart TD
-    Main[Main LocalScript] --> Library[UILibrary init]
-    Library --> Theme[Theme]
-    Library --> Helpers[Helpers]
-    Library --> Registry[Registry Components]
-    Registry --> Leaf[15 factory leaf]
-    Main --> Shell[ScreenGui dan shell delapan halaman]
-    Main --> Endpoint[GetUI BindableFunction]
-    Endpoint --> Consumer[LocalScript integrasi]
-    Consumer --> Library
+    Consumer[LocalScript aplikasi] --> Entry[Entry AstralLite]
+    Main[Main bootstrap delapan tab] --> Entry
+    Entry --> Window[Core Window factory]
+    Window --> LowLevel[Library new dengan ScreenGui]
+    Entry --> LowLevel
+    LowLevel --> Theme[Theme dan Helpers]
+    LowLevel --> Registry[Registry 15 komponen]
+    Window --> Tabs[Tab dan navigasi dinamis]
+    Tabs --> Factories[14 factory config saja]
+    Factories --> LowLevel
+    Main --> Getter[GetUI: UI pages window]
 ```
 
-| Bagian | Tanggung jawab |
+| Sumber | Tanggung jawab |
 | --- | --- |
-| `src/client/Main.client.lua` | Membuat ScreenGui AstralLite, topbar/sidebar/halaman, navigasi, drag/minimize/restore/close, respons viewport, endpoint GetUI. |
-| `src/shared/UILibrary/init.lua` | Constructor khusus klien, validasi config umum/parent, holder notifikasi, registry komponen hidup, wrapper titik/kolon dan guard destroyed. |
-| `Theme.lua` | Menyalin default per library dan memvalidasi override parsial terkelompok. |
-| `Helpers.lua` | Validasi nilai/opsi/callback, pembuatan Instance, tween, scope cleanup, drag mouse/touch. |
-| `Components/init.lua` | Registry beku 15 factory; tidak membuat UI saat require. |
-| `Components/*.lua` | Factory leaf `(context, parent, config)` dengan context Theme/Helpers; tidak require entry library sehingga tidak membentuk siklus. |
-| `ui.lua` | Arsip monolit asli; bukan sumber runtime baru dan tidak dipetakan. |
+| `src/shared/UILibrary/init.lua` | Version 2.0.0; ComponentNames sorted/frozen; CreateWindow dot/colon; constructor `.new`; validasi, registry lifecycle, wrapper UI/komponen. |
+| `Core/Window.lua` | Factory berparameter library (dependency injection), shell/ScreenGui, window/tab API, navigasi, visibility, input, viewport, ownership. Require modul tidak membuat UI/listener. |
+| `Theme.lua` | Salinan default per library dan override parsial terkelompok saat konstruksi. |
+| `Helpers.lua` | Number/Callback/Options, Instance/tween, Scope dan lookup internal GetScope, drag mouse/touch. |
+| `Components/init.lua` | Registry beku 15 leaf factory; tidak require entry. |
+| `Components/*.lua` | Factory `(context, parent, config)` yang mengembalikan API dan `_instance` dengan lifecycle scope. |
+| `src/client/Main.client.lua` | Require sumber, CreateWindow, tambah delapan tab judul-saja, publikasikan GetUI dan hook cleanup endpoint. Bukan lagi pemilik implementasi shell. |
 
-`require(UILibrary)` sendiri tidak membuat shell atau demo. `Library.new({ScreenGui=gui})` membuat holder notifikasi; komponen lain dibuat hanya saat factory dipanggil. Context mengurangi global/shared state, sehingga beberapa library dapat memiliki tema dan registry terpisah.
+Require library tidak memunculkan window/demo. CreateWindow generik membuat GUI/holder dengan **nol tab**; Main-lah yang menambahkan delapan kategori asli dan memilih Home melalui aturan tab pertama. 14 komponen dibuat di tab dengan config saja; Notification dimiliki window/UI dan tetap perlu Show.
 
-## Mapping yang direncanakan
+## Dua jalur pemasangan
 
-- `ReplicatedStorage.UILibrary` menunjuk `src/shared/UILibrary`; `init.lua` menjadi ModuleScript utama, dengan Theme, Helpers, dan Components sebagai anak.
-- `StarterPlayer.StarterPlayerScripts` menunjuk `src/client`; `Main.client.lua` menjadi LocalScript `Main`, disalin ke `Players.LocalPlayer.PlayerScripts.Main` saat Play.
-- Root `ui.lua`, dokumentasi, tes, dan validator tidak masuk runtime.
+### Sumber melalui Rojo
 
-Konfigurasi proyek Rojo **belum tersedia saat inspeksi**. Mapping ini adalah target integrasi, bukan klaim bahwa sinkronisasi/build sudah berjalan. `aftman.toml` tidak diubah.
+`default.project.json` **sudah ada**. Path `src/shared/UILibrary` sengaja tidak diganti agar mapping `ReplicatedStorage.UILibrary` kompatibel. `src/client` dipetakan ke `StarterPlayer.StarterPlayerScripts`, menghasilkan LocalScript Main lalu `PlayerScripts.Main` saat Play. Core adalah Folder dengan ModuleScript Window; Components berasal dari init.lua dan memiliki 15 modul anak.
 
-## Inisialisasi shell dan integrasi
+Root `ui.lua` tetap arsip asli, aftman tidak berubah; arsip, dist, dan tests tidak dipetakan. Place `build/AstralLite.rbxlx` dan sourcemap tersedia sebagai generated/ignored. Build final `rojo build default.project.json -o build/AstralLite.rbxlx` dan sourcemap lulus dengan Rojo 7.7.0-rc.1 pada 2026-11-02. Ini bukti build/mapping, bukan eksekusi Studio.
 
-1. Main menunggu PlayerGui dan ModuleScript UILibrary.
-2. Main membuat ScreenGui, menginisialisasi library, dan membuat scope shell terikat GUI.
-3. Dibuat delapan ScrollingFrame: Home, Combat, Teleport, Player, Visuals, World, Misc, Settings. Isi awal hanya PageTitle dan layout; Home dipilih.
-4. Koneksi input dan viewport dipasang, lalu GUI diparent ke PlayerGui dan layout diperbarui.
-5. Main memasang OnInvoke sebelum memparent BindableFunction `GetUI` ke script. Consumer yang menunggu endpoint tidak menerima shell setengah terinisialisasi.
-6. `GetUI:Invoke()` mengembalikan `UI, pages` langsung pada klien. Tidak ada RemoteEvent/RemoteFunction atau komunikasi server.
+### Distribusi satu ModuleScript
 
-Map pages dan UI adalah objek yang sama untuk semua consumer, bukan salinan/sesi baru. Jangan membuat library kedua di ScreenGui Main hanya untuk memperoleh API yang sudah tersedia. Tidak ada API publik penambahan tab/pemilihan halaman; delapan kategori merupakan shell statis.
+`scripts/build.mjs` membaca hanya library subtree, bukan Main/arsip/tests. Output `dist/AstralLite.lua` mengembalikan tabel library yang sama dan dapat dipasang manual sebagai `ReplicatedStorage.AstralLite`; hierarki modul anak tidak diperlukan. Bootstrap aplikasi ditulis terpisah. Menjalankan bootstrap bundle dan Main sumber bersamaan membuat window tambahan, bukan otomatis berbagi singleton.
 
-## Transaksi pembuatan komponen
+## Bundler leksikal dan graph
 
-Wrapper memvalidasi parent GuiObject, config tabel, Callback function/nil, Name string, serta LayoutOrder finite integer (default 1). Factory membangun di Frame staging tanpa parent melalui pcall. Jika konstruksi gagal, staging dihancurkan sehingga turunan dan scope terkait dibersihkan. Jika sukses, root dipindah ke parent tujuan, staging dihapus, lalu API didaftarkan.
+1. Enumerasi file `.lua` deterministik; tolak symlink, path invalid, node Rojo ambigu, serta `.client.lua`/`.server.lua` di library.
+2. Normalisasi BOM dan CRLF/CR menjadi LF. Scanner membedakan token identifier dari komentar, quoted/long strings, field, dan property. Bukan pencarian regex buta untuk mengganti require dan bukan parser/kompiler Luau lengkap.
+3. Analisis hanya menerima bentuk `require(script.Child)` atau rantai dot statis `script.Parent.Child` sesuai node Rojo (termasuk init/folder). Alias/dynamic require, referensi script bebas di runtime, identifier bundle reserved, dan string interpolasi ditolak. String/komentar inert tidak diperlakukan sebagai dependency.
+4. Resolusi dependency harus menunjuk ModuleScript internal. Missing target/folder, keluar library, cycle (beserta rantai), dan berkas Lua tidak terjangkau dari entry menyebabkan error.
+5. DFS dependency terurut menghasilkan urutan topologis; require statis diganti loader internal. Factory lazy memakai cache internal (termasuk hasil false), loading guard, dan pcall; hasil nil/error tidak disimpan sebagai modul sukses.
+6. Output source memiliki header hash tiap file dan agregat. Manifest menyimpan `version`, `entry`, `sourceSha256`, `artifactSha256`, `sources[{path,sha256}]`, dan `modules` urutan topologis. Tidak ada timestamp/path mesin untuk determinisme. Hash SHA-256 menjaga integritas, bukan tanda tangan penerbit.
+7. Selesaikan graph/render sebelum menulis; staging file sementara, rename atomik per file, manifest dahulu lalu Lua. Pasangan bukan transaksi atomik tunggal; `build:check` mendeteksi pasangan terputus/stale. Error analisis tidak menimpa bundle valid sebelumnya.
 
-Wrapper menormalkan titik/kolon dan memantau root.Destroying. Destroy menghapusnya dari registry; semua metode lain setelah itu error. API leaf tidak ditujukan untuk di-require langsung oleh aplikasi karena melewati validasi, registrasi, dan guard tersebut.
+Tidak ada loadstring, runtime external require, atau runtime script reference pada bundle. `__require` internal menjalankan closure yang sudah menjadi source, bukan membaca/mengeksekusi string. Larangan source tersebut berlaku pada subtree yang dibundle; Main dan spec boleh memakai script/require platform karena tidak masuk bundle. Gunakan sintaks Luau non-interpolasi dan dependency statis saat menambah modul.
 
-## Kepemilikan dan cleanup
+Node 18+ cukup, tanpa paket pihak ketiga. `npm run build` menghasilkan artifact/manifest; `npm run build:check` menghitung ulang dan membandingkan byte tepat tanpa menulis. Versi manifest berasal dari literal entry, **bukan** package.json; entry dan package kini selaras 2.0.0. Build final 2026-11-02 menghasilkan 20 modul dan check byte-exact lulus; kecocokan versi tetap perlu dijaga saat versi berikutnya.
 
-| Pemilik | Yang dimiliki/dibersihkan | Yang tidak otomatis dimiliki |
+## Transaksi, urutan, dan lifecycle
+
+Constructor window/tab memvalidasi input dan membersihkan hasil parsial jika gagal. Factory komponen memakai staging Frame, memvalidasi Name/Callback/LayoutOrder, memasang ownership dan wrapper **sebelum** root dipublikasikan ke parent, lalu memeriksa apakah parent observer telah menghancurkannya. Registry memakai scope komponen melalui GetScope, bukan hanya menunggu callback Destroying untuk mengetahui explicit destroy. CreateTab juga memeriksa flag window/tab setelah pemilihan tab awal, agar tidak mengembalikan tab yang dihancurkan observer selama seleksi.
+
+Factory tab menyalin config, memakai order sukses maksimum + 1 per tab, dan baru menaikkan penghitung setelah factory sukses. Order eksplisit tinggi menaikkan urutan; negatif tidak menurunkannya; UI tingkat rendah tetap default 1. PageTitle order 0. Map Tabs/Pages adalah referensi hidup; gunakan metode, bukan mutasi manual.
+
+## Kepemilikan
+
+| Pemilik | Yang dibersihkan | Batas |
 | --- | --- | --- |
-| Pemanggil Library.new | ScreenGui dan parent yang disuplai | Tidak diambil alih library |
-| UI/library | Komponen hasil factory dan holder Notifications, termasuk notifikasi belum Show | ScreenGui suplai, shell Main, panel eksternal, Instance dari pemakaian Helpers langsung |
-| Komponen | Root, descendant, scope, koneksi, timer/tween yang dikelola | Logika/connection eksternal buatan consumer |
-| Section | Container dan seluruh descendant yang ditempatkan di sana | Tidak mengkloning atau mendaftarkan API eksternal ke registry library |
-| Main | ScreenGui, shell, scope input, listener kamera aktif, endpoint GetUI; cleanup memanggil UI.Destroy | State gameplay/server |
+| Window | ScreenGui buatannya, shell, tab, komponen, holder, listener input/kamera | Jangan mengganti dengan UI.Destroy untuk shutdown penuh. |
+| Tab | Page/container, tombol navigasi, descendant komponen, entri maps | Hapus tab aktif memilih tab tersisa pertama; tab luar window tidak valid. |
+| UI tingkat rendah | Semua komponen terdaftar dan holder, termasuk notifikasi belum Show | Tidak mengambil ownership ScreenGui yang disuplai, parent/panel eksternal, atau Instance dari Helpers langsung. |
+| Komponen/Section | Root dan descendants, koneksi/timer/tween terkait; Section juga anak eksternal yang direparent | Tidak mengkloning atau memindahkan registry komponen antar-library. |
+| Main hooks | Endpoint GetUI, dua koneksi ke GUI/script; script hook mencoba window.Destroy | Self-Destroying script hanya upaya terbaik pada deferred signals. |
 
-`UI:Destroy()` menghapus komponen meski diparent ke panel lain di luar ScreenGui tersebut, karena kepemilikan mengikuti registry. Sebaliknya, panel/shell yang bukan komponen factory tetap ada. Penghapusan ScreenGui eksternal memicu cleanup library; penghapusan script Main memicu scope Main, yang membersihkan UI dan GUI.
+Explicit scope.Destroy menandai state dan mengerjakan cleanup urutan terbalik, lalu secara rekursif memanggil Destroy pada scope descendant yang dikenal registry Helpers yang sama, **secara sinkron sebelum root.Destroy**. Wrapper komponen segera memeriksa flag scope, sehingga descendant terkelola ikut invalid sebelum Destroy pemilik return, tanpa menunggu deferred signal. Error cleanup diperingatkan tanpa menghentikan cleanup lain; ini bukan lookup scope arbitrer dari library/Helpers lain. Destroy idempoten; komponen/tab menolak metode lain setelah mati. Window.IsVisible adalah pengecualian: false setelah destroy. Penghapusan root/GUI dari luar mengikuti jadwal signal Roblox; jangan menjanjikan semua referensi langsung invalid sebelum signal diproses.
 
-Scope mengerjakan cleanup urutan terbalik, sekali saja, dan melanjutkan cleanup lain bila satu fungsi gagal (warn `Astral cleanup`). Root.Destroying juga memicu cleanup. Menghapus Section menghancurkan anak sehingga API anak dari library otomatis ikut invalid. Field `_instance`, `Container`, `UI.Theme`, dan `UI.Helpers` sendiri tidak mempunyai guard akses properti; jangan memakai referensinya seolah masih aktif sesudah destroy.
+Untuk shutdown permanen, **window:Destroy() sebelum menghancurkan script pemilik**. Hide/Minimize/close bukan cleanup; berhentinya script bukan jaminan listener eksternal sudah dilepas. Low-level UI.Destroy menyisakan shell/endpoint dan dapat membuat GetUI masih mengembalikan UI mati; window.Destroy tetap dapat menyelesaikan ownership.
 
-**Batas penting:** menghancurkan UI saja tidak menghentikan shell Main atau menghapus GetUI. Endpoint yang masih hidup dapat mengembalikan UI yang sudah destroyed. Untuk menutup seluruh shell permanen, pemiliknya harus membersihkan GUI/script/scope Main; tombol close hanya menyembunyikan.
+## Main.GetUI
 
-## Input, animasi, dan viewport
+Bootstrap menambahkan Home, Combat, Teleport, Player, Visuals, World, Misc, Settings tanpa demo. OnInvoke dipasang sebelum endpoint diparent ke Main. `GetUI:Invoke()` lokal mengembalikan **UI, pages, window**; dua return pertama kompatibel, bukan salinan. Endpoint tidak ada otomatis pada pemakaian bundle/generic CreateWindow, bukan remote dan bukan API server.
 
-- Scope mengelola koneksi GUI dan service. BindDrag memasang listener InputChanged/InputEnded/WindowFocusReleased hanya selama gesture aktif, melacak sentuhan yang memulai drag, dan memutusnya saat selesai/batal/destroy.
-- Main memakai Activated untuk navigasi dan tombol shell; sejumlah komponen tetap memakai MouseButton1Click. Dukungan mouse/touch tidak sama dengan navigasi gamepad/aksesibilitas lengkap.
-- Logo floating mengonversi posisi scale+offset ke piksel sebelum drag, memakai ukuran Frame DragBounds (ruang GUI termasuk inset), lalu clamp menurut ukuran/anchor logo. Pada layar lebih kecil dari logo, logo dipusatkan pada sumbu itu.
-- Ambang gerak membedakan klik/drag logo, termasuk posisi input akhir. Topbar drag tidak di-clamp ke layar.
-- UIScale memakai minimum rasio lebar/tinggi dengan MaxScale tanpa floor lama 0,55. Layar kecil tidak dipaksa memakai skala minimum yang meluap, tetapi teks dapat menjadi sangat kecil.
-- Main memutus listener ViewportSize lama ketika CurrentCamera berubah; bounds.AbsoluteSize juga memicu layout. Referensi awal kamera tidak diasumsikan selalu ada.
-- H.Tween membatalkan animasi ketika target dihancurkan; Toggle/ProgressBar membatalkan tween state sebelumnya. Notification membatalkan timer/show tween saat destroy. Tidak ada loop render permanen.
+## Layout dan input
 
-## Tema dan batas runtime
+- Core.Window mengelola topbar drag, Activated navigasi/control, minimize/restore, RightShift, bounds inset-aware, kamera aktif, dan UIScale. Topbar belum di-clamp; logo dikonversi scale+offset ke piksel sebelum clamp, termasuk layar sangat kecil.
+- BindDrag memakai listener global hanya selama gesture, melacak touch pemula; release/focus lost/destroy menghentikan gesture. Tidak ada global input manager bersama: capture key independen dan RightShift membuka semua window.
+- Setiap window menukar listener ViewportSize saat CurrentCamera berubah; bounds.AbsoluteSize juga memperbarui layout. Skala tanpa floor 0,55 menjaga ukuran tetapi dapat membuat teks kecil.
+- Section mengalibrasi ancestor UIScale dari `header.AbsoluteSize.Y / 32`, mengonversi AbsoluteContentSize piksel menjadi tinggi logis + padding. Menghindari feedback AutomaticSize. Spec 0,5/1/2 tersedia; ini penjelasan implementasi, **bukan hasil uji Studio**.
+- Tema hanya konstruksi; window memakai override masing-masing. Tidak ada live update, persistence, gameplay, remote, atau gamepad/aksesibilitas yang telah diverifikasi.
 
-Tema disalin per constructor dengan override parsial per grup; tidak ada live theme propagation. Main saat ini menginisialisasi tema default. Library hanya menyajikan UI: tidak menyimpan konfigurasi, tidak mengeksekusi fitur Combat/Teleport, tidak mengakses executor, tidak mengunduh kode, dan tidak membutuhkan paket pihak ketiga. Gambar logo tetap aset Roblox yang memerlukan akses aset normal platform.
-
-Validasi runtime tetap memerlukan Studio. Inspeksi sumber, validator statis opsional, atau keberhasilan build di masa depan tidak membuktikan koordinat input, urutan event, layout, maupun cleanup sudah benar di semua perangkat.
+Validasi sumber/tooling/dokumentasi selesai 2026-11-02: 24/24 tes Node tanpa fail/skip, bundle 20 modul v2.0.0 beserta byte-exact check, build/sourcemap Rojo, validator 15 factory dan kompilasi 24 Lua, serta diagnostik editor bersih. Hasil terperinci di [AUDIT.md](AUDIT.md), prosedur publikasi di [RELEASING.md](RELEASING.md). Studio source/bundle specs, input/render/perangkat/memori belum dijalankan; runtime Studio tidak tersedia. Build/compiler/Node tidak menggantikan bukti runtime tersebut. Release/tag belum dipublikasikan.

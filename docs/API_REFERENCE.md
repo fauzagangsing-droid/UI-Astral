@@ -1,8 +1,57 @@
 # Referensi API
 
-Referensi ini mengikuti `src/shared/UILibrary`, bukan asumsi dari nama komponen. Contoh penggunaan ada di [COMPONENTS.md](COMPONENTS.md).
+Referensi **2.0.0, belum dirilis** mengikuti `src/shared/UILibrary` dan `Core/Window.lua`; bundle mengembalikan tabel API yang sama. `AstralLite` di contoh adalah hasil require ModuleScript bundle `ReplicatedStorage.AstralLite`, atau alias lokal hasil require sumber `ReplicatedStorage.UILibrary`. Contoh ada di [COMPONENTS.md](COMPONENTS.md).
 
-## Entry point dan kontrak umum
+Status **2026-11-02**: entry/package 2.0.0 selaras; build/check 20 modul, 24/24 tes Node tanpa fail/skip, build/sourcemap Rojo dan validator 15 factory dengan kompilasi 24 Lua lulus; editor 0 error/0 warning. Detail [AUDIT.md](AUDIT.md). Ini validasi sumber/tooling/dokumentasi, **bukan** kelulusan Studio source/bundle specs atau input/render/perangkat/memori; runtime Studio belum tersedia. Release/tag belum dipublikasikan.
+
+## Library dan metadata
+
+- `AstralLite.Version: string = "2.0.0"`: versi API/build, bukan bukti release telah diterbitkan.
+- `AstralLite.ComponentNames: array<string>`: tabel beku, diurutkan alfabetis, berisi Button, ColorPicker, Divider, Dropdown, Keybind, Label, MultiDropdown, Notification, Paragraph, ProgressBar, SearchBox, Section, Slider, TextBox, Toggle. Total 15; Notification tidak dibuat melalui tab.
+- `AstralLite:CreateWindow(config?) -> window`, alias titik `AstralLite.CreateWindow(config?)`: hanya klien; require library sendiri tidak membuat UI/listener.
+- `AstralLite.new(config) -> UI`: API tingkat rendah, **titik**, dijelaskan setelah window/tab. Tidak ada instance global UI otomatis.
+
+## Window
+
+Config CreateWindow opsional (nil menjadi `{}`; false ditolak):
+
+| Field | Tipe/default dan perilaku |
+| --- | --- |
+| `Title` | String, default `"ASTRAL LITE"`. Hanya judul default persis itu memakai RichText aksen; judul lain teks biasa. |
+| `Version` | String, default AstralLite.Version; hanya teks topbar, tidak mengubah versi library/manifest. |
+| `Name` | String, default `"AstralLite"`; nama ScreenGui yang dibuat, bukan nama tab. String kosong diizinkan untuk field window. |
+| `Theme` | Override tabel parsial per grup; validasi seperti bagian Tema. Hanya saat konstruksi. |
+| `Parent` | Instance PlayerGui; default Players.LocalPlayer:WaitForChild("PlayerGui"). Tidak menerima ScreenGui/Frame/CoreGui. |
+
+Window membuat ScreenGui sendiri (`ResetOnSpawn=false`, `DisplayOrder=10`), shell, holder, dan **nol tab**. Kegagalan konstruksi membersihkan GUI parsial. Field publik: `UI` (library tingkat rendah), `Theme` (sama dengan UI.Theme), `ScreenGui`, `Pages` (map nama → ScrollingFrame), `Tabs` (map nama → API tab), `_instance` (Frame Window, **bukan** root ownership ScreenGui). Map adalah referensi hidup; jangan memutasi map/field untuk mengelola tab.
+
+Seluruh metode berikut kompatibel titik/kolon:
+
+| Metode | Perilaku/hasil |
+| --- | --- |
+| `CreateTab({Name, Icon?}) -> tab` | Name string tidak kosong dan unik; Icon string opsional default `""`, glyph teks, bukan asset ID. Config wajib tabel; false/nil/duplikat ditolak. Tab pertama otomatis dipilih; guard sesudah seleksi awal menolak hasil bila window/tab dihancurkan selama seleksi. Tidak ada callback/tab LayoutOrder config publik. |
+| `GetTab(name) -> tab atau nil` | Name wajib string; nama tidak ditemukan menghasilkan nil. |
+| `SelectTab(nameOrTab) -> tab` | Pilih nama yang ada atau objek tab milik window ini; nama hilang/tab asing/destroyed ditolak. |
+| `CreateNotification(config?) -> notification` | Delegasi ke UI.CreateNotification; tetap perlu Show eksplisit. |
+| `Show()`, `Restore()` | Alias: tampilkan frame, sembunyikan logo floating, reset Size ke ukuran tema awal. Tidak mengubah ScreenGui.Enabled yang diubah pemanggil. |
+| `Hide()` | Sembunyikan frame dan logo; bukan cleanup dan tidak mematikan holder notifikasi. Close memanggil ini. |
+| `Minimize()` | Sembunyikan frame, posisikan/clamp logo, tampilkan logo. Bukan destroy. |
+| `IsVisible() -> boolean` | True bila scope hidup, ScreenGui.Enabled true, dan frame utama visible; tidak menghitung visibility logo/notifikasi. **Tetap valid setelah destroy, return false.** |
+| `Destroy()` | Idempoten: cleanup library, tab/maps, input/kamera dan seluruh ScreenGui milik window. Metode lain selain IsVisible/Destroy error sesudahnya. |
+
+Tidak ada SetTitle, SetSize, SetTheme, GetSelectedTab, atau hotkey per-window config. RightShift membuka **semua window** yang masih memasang listener jika input tidak diproses dan TextBox tidak fokus. Hapus permanen lewat window.Destroy, bukan UI.Destroy atau hanya menghancurkan `_instance`. Penghapusan GUI eksternal mengikuti penjadwalan Destroying Roblox; utamakan destroy eksplisit, termasuk sebelum script pemilik dihancurkan.
+
+## Tab dan 14 factory tanpa parent
+
+Field tab: `Name: string`, `Container: ScrollingFrame`, `_instance` alias Container. `window.Pages[name] == tab.Container` dan `window.Tabs[name] == tab`. Awal setiap page hanya PageTitle (LayoutOrder 0) dan layout.
+
+- `tab:Select() -> tab`: memilih dirinya, termasuk gaya `tab.Select()`.
+- `tab:Destroy()`: idempoten; hapus halaman, tombol navigasi, dan descendant komponen; hapus entri map. Bila tab aktif dihapus, pilih tab tersisa pertama dalam urutan pembuatan; bila tak ada, tidak ada pilihan. Nama boleh dipakai ulang setelah cleanup.
+- `tab:CreateButton(config?)`, `CreateColorPicker`, `CreateDivider`, `CreateDropdown`, `CreateKeybind`, `CreateLabel`, `CreateMultiDropdown`, `CreateParagraph`, `CreateProgressBar`, `CreateSearchBox`, `CreateSection`, `CreateSlider`, `CreateTextBox`, `CreateToggle` → API komponen yang sama dengan tingkat rendah. Semua menerima **config saja**, bukan parent, kompatibel titik/kolon. **Tidak ada tab.CreateNotification**.
+- Config disalin dangkal. LayoutOrder default adalah urutan per tab: mulai 1, lalu nilai maksimum order sukses + 1. Order eksplisit harus finite integer; order tinggi menaikkan penghitung, negatif tidak menurunkannya. Kegagalan factory tidak menaikkan penghitung. Tidak mengubah config milik pemanggil; mencampur factory UI tingkat rendah tidak otomatis menyinkronkan penghitung tab.
+- Setelah tab destroyed, Select dan semua factory-nya error; Destroy tetap aman. Hapus page/tombol eksternal juga memicu cleanup, dengan waktu observasi mengikuti signal Roblox.
+
+## Entry tingkat rendah dan kontrak umum
 
 ```lua
 local Library = require(game:GetService("ReplicatedStorage"):WaitForChild("UILibrary"))
@@ -15,7 +64,7 @@ local UI = Library.new({ ScreenGui = gui, Theme = optionalPartialTheme })
 - `UI:Destroy()`: menghapus semua komponen terdaftar dan holder notifikasi serta koneksinya; tidak menghapus ScreenGui yang disuplai, shell, atau parent lain milik pemanggil. Idempoten. Factory setelah ini error `Library is destroyed`.
 - `UI.Theme`: tabel tema milik instance library. `UI.Helpers`: helper terikat tema (bagian terakhir referensi).
 - `component._instance`: root Instance; tersedia pada seluruh 15 jenis. Menghapusnya langsung juga memicu cleanup dan menandai API telah destroyed. Preferensikan `component:Destroy()`.
-- Semua komponen mempunyai `Destroy()` idempoten. **Seluruh metode komponen lainnya error setelah root dihancurkan**, termasuk getter, `Show`, dan `SetCallback`. Aturan wrapper ini berlaku walaupun fungsi internal modul memiliki guard yang hanya return.
+- Semua komponen mempunyai `Destroy()` idempoten. **Seluruh metode komponen lainnya error setelah scope dihancurkan**, termasuk getter, `Show`, dan `SetCallback`. Destroy eksplisit menandai scope sebelum return; Helpers juga menghancurkan scope descendant yang dikenal pada registry yang sama secara rekursif/sinkron sebelum root.Destroy. Wrapper memeriksa flag ini segera, tidak menunggu signal root. Penghapusan root eksternal mengikuti penjadwalan Destroying; aturan ini tidak sama dengan pengecualian window.IsVisible.
 - Wrapper factory UI dan metode komponen mendukung titik/kolon: `UI.CreateSlider(parent, config)`, `UI:CreateSlider(parent, config)`, `slider.SetValue(5)`, `slider:SetValue(5)`. `UI.Destroy()`/`UI:Destroy()` juga boleh. Ini bukan jaminan untuk constructor `Library.new`, modul leaf, atau helper.
 - Konstruksi silent: tidak ada callback awal, termasuk saat normalisasi Default. Tidak ada parameter publik `silent` pada setter.
 
@@ -24,12 +73,14 @@ local UI = Library.new({ ScreenGui = gui, Theme = optionalPartialTheme })
 | Field | Kontrak |
 | --- | --- |
 | `Name` | String opsional; default per komponen di bawah. Kebanyakan menjadi nama root dan sebagian menjadi teks judul. Notification tetap bernama `Notification`, meski `Name` valid diberikan. |
-| `LayoutOrder` | Angka finite integer, default `1` untuk **semua**, termasuk Notification. Negatif/0 diizinkan; bukan harus positif. Parent perlu layout yang memakai LayoutOrder. |
+| `LayoutOrder` | Angka finite integer; default `1` pada **factory tingkat rendah dan Notification**, tetapi otomatis bertambah pada factory tab. Negatif/0 diizinkan; parent perlu layout yang memakai LayoutOrder. |
 | `Callback` | Function atau nil, divalidasi bahkan pada komponen yang tidak memakainya. Tidak otomatis menambah metode `SetCallback` pada jenis pasif. |
 
-`config` yang dihilangkan menjadi `{}`. Validasi bukan skema tertutup: field tak dikenal tidak ditolak, tetapi tidak berarti didukung. Field numerik yang melewati `H.Number` menolak NaN/infinity. Teks/warna/style lain sebagian diteruskan ke properti Roblox; gunakan tipe yang tercantum, jangan mengandalkan coercion/error seragam. Boolean bertanda *truthy* dikonversi dengan aturan Luau (0 dan string kosong tetap true).
+`config` komponen yang dihilangkan/nil menjadi `{}`; false ditolak pada titik/kolon, termasuk Notification tanpa config yang memakai default identik. `Callback=false` dan `SetCallback(false)` juga error; gunakan nil untuk melepas callback. Validasi bukan skema tertutup: field tak dikenal tidak ditolak, tetapi tidak berarti didukung. Field numerik yang melewati `H.Number` menolak NaN/infinity. Teks/warna/style lain sebagian diteruskan ke properti Roblox; gunakan tipe yang tercantum, jangan mengandalkan coercion/error seragam. Boolean bertanda *truthy* dikonversi dengan aturan Luau (0 dan string kosong tetap true).
 
 Options/values menerima array padat berindeks `1..n`, hanya string atau angka finite. Array berlubang/dictionary/tipe lain ditolak; duplikat dihapus dengan mempertahankan kemunculan pertama. Angka `1` berbeda dari string `"1"`. Daftar disalin, bukan referensi hidup ke tabel pemanggil.
+
+Bagian 1–15 berikut merinci config dan metode hasil komponen. Signature `UI:CreateX(parent, config?)` adalah bentuk tingkat rendah; untuk **semua 14 jenis non-Notification**, bentuk utama ekuivalennya `tab:CreateX(config?)`, dengan parent otomatis tab.Container. Perbedaan LayoutOrder mengikuti aturan tab di atas. Komponen anak Section dibuat lewat `window.UI:CreateX(section.Container, config)` atau AddComponent, bukan melalui factory Section yang tidak tersedia.
 
 ## 1. Toggle
 
@@ -132,7 +183,7 @@ Drag kanal ketika panel terbuka mengirim callback. Angka kanal ditampilkan 0..25
 
 ## 9. Notification
 
-`UI:CreateNotification(config?)` — **tanpa parent**.
+`window:CreateNotification(config?)` atau `UI:CreateNotification(config?)` — **tanpa parent**, tidak tersedia pada tab.
 
 - Config: `Title="Notification"`, `Content=""`, `Type="Info"`, `Duration=3`, ditambah field umum.
 - Type memakai key case-sensitive `Info`, `Success`, `Warning`, `Error`; nilai tidak dikenal fallback Info. Duration angka finite, negatif di-clamp 0.
@@ -152,7 +203,7 @@ Setelah timeout, semua metode kecuali Destroy error; untuk menampilkan lagi buat
 - `AddComponent(componentOrInstance)`: memindahkan Instance atau `table._instance` ke Container, lalu memperbarui ukuran; input tanpa Instance diabaikan. Bukan cloning/registrasi ownership library baru.
 - `SetExpanded(open)` (*truthy*), `GetExpanded() -> boolean`, `Destroy()`.
 
-Collapsible hanya mengatur interaksi klik header; SetExpanded tetap bekerja saat false. Tidak ada callback ekspansi. Tinggi dihitung dari `UIListLayout.AbsoluteContentSize` dan padding (bukan lingkar AutomaticSize); pakai tinggi anak berbasis offset yang wajar. Menghapus Section juga menghancurkan seluruh descendant, termasuk Instance eksternal yang dipindahkan ke Container.
+Collapsible hanya mengatur interaksi klik header; SetExpanded tetap bekerja saat false. Tidak ada callback ekspansi. Tinggi logis dihitung dari `UIListLayout.AbsoluteContentSize.Y / scale + 12`, dengan kalibrasi scale `header.AbsoluteSize.Y / 32`; tinggi Section adalah 32 + tinggi isi saat expanded, 32 saat collapsed. Listener layout dan ukuran header memperbarui ukuran saat UIScale ancestor berubah (termasuk skala window). Pakai tinggi anak offset yang wajar; ini bukan layout solver untuk siklus ukuran relatif. Ada spec skala 0,5/1/2, **belum dieksekusi di Studio**. Menghapus Section menghancurkan seluruh descendant, termasuk Instance eksternal yang dipindahkan ke Container.
 
 ## 11. Label
 
@@ -232,7 +283,7 @@ Callback diteruskan apa adanya, tanpa pcall/debounce otomatis atau pengiriman ke
 | `Assets` | Dragon=`"rbxassetid://101879171935546"` (string) |
 | `Window` | ViewportWidth=740, ViewportHeight=500, MaxScale=1, DragThreshold=6 |
 
-Override hanya kontrak **konstruksi**. Tidak ada `SetTheme`/observer/live update; mengubah UI.Theme langsung tidak memperbarui seluruh Instance dan tidak didukung sebagai mekanisme tema dinamis. Library mandiri tidak membangun shell; parameter Window dan dimensi jendela dikonsumsi Main. Main saat ini memakai default; untuk menyesuaikannya, integrasi harus memasok Theme pada pemanggilan constructor di Main sebelum shell dibuat.
+Override hanya kontrak **konstruksi**. Tidak ada `SetTheme`/observer/live update; mutasi UI.Theme/window.Theme bukan pembaruan seluruh Instance. `Core/Window.lua` mengonsumsi grup Window dan dimensi jendela saat `AstralLite:CreateWindow({Theme=...})`; Main hanya bootstrap yang saat ini memakai default. `.new()` sendiri tetap tidak membangun shell. `Theme.new` adalah fungsi modul sumber pendukung, bukan `AstralLite.Theme.new` yang diekspor dalam bundle.
 
 ## Helpers yang diekspos
 
@@ -241,17 +292,20 @@ Override hanya kontrak **konstruksi**. Tidak ada `SetTheme`/observer/live update
 | Fungsi | Perilaku/hasil |
 | --- | --- |
 | `H.Number(value, default, name?) -> number` | Mengganti nil dengan default, assert angka finite; label name untuk pesan error. |
-| `H.Callback(callback) -> function | nil` | Memvalidasi function/nil. |
+| `H.Callback(callback) -> function atau nil` | Memvalidasi function/nil. |
 | `H.Options(values?) -> array` | Validasi/salin/deduplikasi array seperti aturan Options; nil menjadi kosong. |
 | `H.Make(className, props) -> Instance` | Set properti sebelum Parent; bila gagal hapus Instance parsial dan error. Props tabel wajib untuk pemakaian ini. |
 | `H.Tween(instance, duration, goal) -> Tween` | Quad Out, langsung Play; cancel saat target destroyed; disconnect listener pada selesai/destroy. Bukan pembatal otomatis semua tween sebelumnya pada target. |
 | `H.CardRow(parent, name, height) -> Frame` | Row bergaya kartu dengan corner dan stroke tema. |
-| `H.Scope(root) -> scope` | Scope terikat root.Destroying; field Destroyed boolean. |
+| `H.Scope(root) -> scope` | Scope terikat root.Destroying; field Destroyed boolean. Buat satu scope pemilik per root, bukan menimpa scope komponen. |
+| `H.GetScope(root) -> scope atau nil` | Lookup scope terdaftar pada Helpers ini (weak-key registry); **detail internal, tidak stabil untuk integrasi**. Entry memakai state scope untuk guard sinkron. |
 | `scope:Add(cleanupFunction) -> function` | Cleanup urutan terbalik, langsung dijalankan bila scope sudah destroyed. Error cleanup diperingatkan dan cleanup lain dilanjutkan. |
 | `scope:Connect(signal, callback) -> RBXScriptConnection` | Callback hanya selama hidup; disconnect pada cleanup. Connect setelah destroy error. |
-| `scope:Destroy()` | Idempoten; jalankan cleanup lalu hapus root. Menghapus root eksternal juga memicu cleanup. |
+| `scope:Destroy()` | Idempoten; tandai scope/cleanup, hancurkan rekursif scope descendant yang dikenal registry Helpers ini secara sinkron, lalu root.Destroy. Scope terkelola beserta guard-nya sudah mati sebelum return. Penghapusan root eksternal juga memicu cleanup, mengikuti jadwal signal Roblox. |
 | `H.BindDrag(scope, target, onUpdate, onEnd?)` | Mouse kiri/touch. `onUpdate(input, began: boolean)` saat mulai dan bergerak; `onEnd(startInput)` saat release normal. Listener global hanya selama gesture; sentuhan lain diabaikan. Focus lost/destroy membatalkan tanpa onEnd. Tidak mengembalikan controller publik. |
 
 ## Main.GetUI
 
-`Players.LocalPlayer.PlayerScripts.Main:WaitForChild("GetUI"):Invoke() -> UI, pages` pada klien. `pages` hanya map delapan nama asli ke ScrollingFrame. Ini BindableFunction, bukan jaringan atau factory halaman. Main mengelola ScreenGui `AstralLite`, shell, input, listener kamera, dan endpoint; penghancuran script/GUI membersihkan scope Main. `UI:Destroy()` sendiri tidak menghapus endpoint atau shell, sehingga GetUI yang masih ada bisa mengembalikan UI yang sudah destroyed. Pemilik shell harus mengelola siklus hidup tersebut.
+`Players.LocalPlayer.PlayerScripts.Main:WaitForChild("GetUI"):Invoke() -> UI, pages, window` pada klien. Dua return awal kompatibel: `UI == window.UI`, `pages == window.Pages`. Main memanggil CreateWindow, menambahkan Home, Combat, Teleport, Player, Visuals, World, Misc, Settings (judul saja), lalu mempublikasikan BindableFunction lokal setelah OnInvoke dipasang. Ini bukan remote dan bukan bagian bundle bootstrap.
+
+`window:CreateTab` dapat menambah map sesudah bootstrap; generic CreateWindow sendiri tidak menambah delapan tab. Main mengikat cleanup endpoint pada GUI dan script. Handler script.Destroying sendiri hanya upaya terbaik pada deferred signals; **pemilik harus window:Destroy() sebelum menghancurkan script** bila memungkinkan. UI.Destroy tidak menghapus shell/endpoint; endpoint yang tetap hidup dapat mengembalikan UI yang sudah destroyed. Destroy window menghapus GUI, kemudian hooks endpoint mengikuti signal cleanup.

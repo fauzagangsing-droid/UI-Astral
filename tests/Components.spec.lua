@@ -1,10 +1,12 @@
 -- Manual client Studio runner. Requiring this ModuleScript does not run tests.
-return function()
+return function(libraryOverride)
 	local RunService = game:GetService("RunService")
 	assert(RunService:IsStudio() and RunService:IsClient(), "Run Components.spec on a Studio Play client")
 	local Players = game:GetService("Players")
 	local ReplicatedStorage = game:GetService("ReplicatedStorage")
-	local Library = require(ReplicatedStorage:WaitForChild("UILibrary"))
+	local Library = libraryOverride
+		if Library == nil then Library = require(ReplicatedStorage:WaitForChild("UILibrary")) end
+		assert(type(Library) == "table", "Library override must be the required library table")
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
 	local passed = 0
 
@@ -98,14 +100,15 @@ return function()
 		if type(expected) == "table" then array(actual, expected) else equal(actual, expected) end
 	end
 	local function dead(api)
-		api:Destroy()
-		api.Destroy()
+		-- Check before repeating Destroy so this helper cannot hide a missing lifecycle guard.
 		for name, method in pairs(api) do
 			if type(method) == "function" and name ~= "Destroy" then
 				rejects(function() method(api) end)
 				rejects(function() method() end)
 			end
 		end
+		api:Destroy()
+		api.Destroy()
 	end
 
 	for _, spec in ipairs(factories) do
@@ -118,6 +121,10 @@ return function()
 			local b = create(UI, panel, spec[1], config, false)
 			task.wait() -- Flush deferred property signals before checking construction silence.
 			equal(calls, 0, "Construction must be silent")
+						if a.SetCallback then
+							rejects(function() a:SetCallback(false) end)
+							equal(calls, 0, "Rejected callback must not fire")
+						end
 			assert(a ~= b and a._instance ~= b._instance, "Factories must return independent instances")
 			equal(a._instance.LayoutOrder, 17)
 			equal(a._instance.Parent, spec[1] == "Notification" and gui:FindFirstChild("Notifications") or panel)
@@ -131,6 +138,7 @@ return function()
 				valueEqual(b[spec[3]](), spec[6])
 			end
 			a:Destroy()
+			dead(a) -- Explicit destruction rejects methods immediately, without a scheduler yield.
 			task.wait()
 			equal(a._instance.Parent, nil)
 			assert(b._instance:IsDescendantOf(gui), "Destroying a sibling must not destroy b")
@@ -347,6 +355,7 @@ return function()
 		section.AddComponent(button._instance)
 		equal(button._instance.Parent, section.Container)
 		section:SetExpanded(true)
+		for _ = 1, 6 do RunService.RenderStepped:Wait() end
 		equal(section.Container.Visible, true)
 		assert(section._instance.Size.Y.Offset > 32)
 		section.SetExpanded(false)
@@ -355,6 +364,33 @@ return function()
 		section:Destroy()
 		task.wait()
 		dead(label); dead(button)
+	end)
+
+	test("Section logical heights at ancestor scales 0.5, 1 and 2", function(UI, panel)
+		local scale = Instance.new("UIScale")
+		scale.Scale = 0.5
+		scale.Parent = panel
+		local section = UI:CreateSection(panel, { Collapsible = true })
+		section:AddComponent(UI:CreateButton(panel, { LayoutOrder = 1 }))
+		section:AddComponent(UI:CreateButton(panel, { LayoutOrder = 2 }))
+		local header = child(section._instance, "Header", "TextButton")
+		local layout = section.Container:FindFirstChildWhichIsA("UIListLayout")
+		assert(layout)
+		for _, value in ipairs({ 0.5, 1, 2 }) do
+			scale.Scale = value
+			section:SetExpanded(true)
+			for _ = 1, 8 do RunService.RenderStepped:Wait() end
+			near(header.AbsoluteSize.Y, 32 * value, 0.05)
+			near(layout.AbsoluteContentSize.Y / value, 78, 0.05) -- Two 36-unit rows plus one 6-unit gap.
+			near(section.Container.Size.Y.Offset, 90, 0.05) -- Content plus 4/8-unit padding.
+			near(section._instance.Size.Y.Offset, 122, 0.05)
+			section:SetExpanded(false)
+			equal(section.Container.Visible, false)
+			near(section._instance.Size.Y.Offset, 32, 0.05)
+			section.SetExpanded(true)
+			for _ = 1, 4 do RunService.RenderStepped:Wait() end
+			near(section._instance.Size.Y.Offset, 122, 0.05)
+		end
 	end)
 
 	test("Keybind enum validation, aliases and cancellation", function(UI, panel)
@@ -385,11 +421,14 @@ return function()
 			equal(#gui:GetDescendants(), before, "Invalid config leaked UI")
 		end
 		for _, spec in ipairs(factories) do
-			for _, bad in ipairs({ { Callback = true }, { Name = 123 }, { LayoutOrder = 1.5 }, { LayoutOrder = math.huge } }) do
+			for _, bad in ipairs({ { Callback = true }, { Callback = false }, { Name = 123 }, { LayoutOrder = 1.5 }, { LayoutOrder = math.huge } }) do
 				noLeak(function() create(UI, panel, spec[1], bad, true) end)
 			end
 			noLeak(function() create(UI, panel, spec[1], "not a config", false) end)
+						noLeak(function() create(UI, panel, spec[1], false, false) end)
+						noLeak(function() create(UI, panel, spec[1], false, true) end)
 		end
+		noLeak(function() Library.new(false) end)
 		local invalid = {
 			{ "Slider", { Min = "bad" } }, { "Slider", { Step = 0 / 0 } },
 			{ "Dropdown", { Options = { [2] = "Sparse" } } },
@@ -435,6 +474,20 @@ return function()
 		equal(count, 0)
 		slider:SetValue(6)
 		equal(count, 1, "Rejected SetCallback must preserve the callback")
+	end)
+
+	test("Notification colon no config and dot nil use identical defaults", function(UI, _, gui)
+		local colon = UI:CreateNotification()
+		local dot = UI.CreateNotification(nil)
+		assert(colon._instance ~= dot._instance)
+		for _, api in ipairs({ colon, dot }) do
+			equal(api:GetTitle(), "Notification")
+			equal(api:GetContent(), "")
+			equal(api._instance.Visible, false)
+			equal(api._instance.Parent, child(gui, "Notifications", "Frame"))
+			api:Destroy()
+			dead(api)
+		end
 	end)
 
 	test("Notification Show, expiry and early timer cleanup", function(UI, _, gui, own)
