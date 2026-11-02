@@ -1,0 +1,17 @@
+{
+  "name": "AstralLite",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "UILibrary": { "$path": "src/shared/UILibrary" }
+    },
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "$path": "src/client"
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+# Generated Rojo places and models
+/build/
+*.rbxl
+*.rbxlx
+*.rbxm
+*.rbxmx
+*.rbxl.lock
+*.rbxlx.lock
+# Local validation tools (not library dependencies)
+.tools/
+# Editor / OS files
+.DS_Store
+Thumbs.db
